@@ -1,0 +1,43 @@
+# Install required packages (run this in your notebook environment if needed)
+!pip install yfinance pandas numpy scikit-learn tensorflow matplotlib
+
+import numpy as np
+import pandas as pd
+import yfinance as yf
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense
+
+# Load data
+data = yf.download("AAPL", start="2020-01-01", end="2023-01-01")[['Close']]
+
+# Scale data
+scaler = MinMaxScaler((0, 1))
+data_scaled = scaler.fit_transform(data)
+
+# Prepare data for LSTM
+X, y = [], []
+for i in range(60, len(data_scaled)):
+    X.append(data_scaled[i-60:i, 0])
+    y.append(data_scaled[i, 0])
+X, y = np.array(X), np.array(y)
+X = X.reshape(X.shape[0], X.shape[1], 1)
+
+# Train-test split
+train_size = int(len(X) * 0.8)
+X_train, y_train = X[:train_size], y[:train_size]
+X_test, y_test = X[train_size:], y[train_size:]
+
+# Build and train LSTM model
+model = Sequential([
+    LSTM(50, return_sequences=True, input_shape=(X_train.shape[1], 1)),
+    LSTM(50),
+    Dense(1)
+])
+model.compile(optimizer='adam', loss='mean_squared_error')
+model.fit(X_train, y_train, epochs=5, batch_size=32)
+
+# Predict next day
+next_day_input = data_scaled[-60:].reshape(1, 60, 1)
+next_day_price = scaler.inverse_transform(model.predict(next_day_input))
+print(f"Predicted next day stock price: {next_day_price[0][0]}")
